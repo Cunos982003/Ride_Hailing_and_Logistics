@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+# Check only: never rewrite or stage the developer's changes.
+exec sh ./mvnw -B spotless:check
