@@ -1,0 +1,30 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.pid
+
+# Environment
+.env
+.env.local
+
+# Flyway
+*.conf
+
+# Test
+.testcontainers.properties

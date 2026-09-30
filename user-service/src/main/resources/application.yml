@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: user-service
+  threads:
+    virtual:
+      enabled: true
+  main:
+    keep-alive: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  jwt:
+    key-id: ${JWT_KEY_ID:ride-hailing-key-1}
+    issuer: ${JWT_ISSUER:https://api.ridehailing.local}
+    audience: ${JWT_AUDIENCE:ride-hailing-app}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:config/keys/jwt-private.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:config/keys/jwt-public.pem}
+    access-token-lifetime: ${JWT_ACCESS_LIFETIME:PT15M}
+    refresh-token-lifetime: ${JWT_REFRESH_LIFETIME:P7D}
