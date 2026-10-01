@@ -5,9 +5,9 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://localhost:5432/ride
-    username: ride
-    password: ${PG_PASSWORD:postgres-local-only}
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/user_db
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
@@ -16,7 +16,8 @@ spring:
   data:
     redis:
       host: localhost
-      port: 6379
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
 
 server:
   port: 8000

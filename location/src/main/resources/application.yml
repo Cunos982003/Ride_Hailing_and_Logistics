@@ -1,13 +1,17 @@
 spring:
   application:
-    name: location
-  threads:
-    virtual:
-      enabled: true
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+    name: location-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+app:
+  internal-key: ${INTERNAL_KEY:secret}
 
 server:
-  port: 8002
-  shutdown: graceful
+  port: 8082
+
+logging:
+  level:
+    com.ridehailing: DEBUG
