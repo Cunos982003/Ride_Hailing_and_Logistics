@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: location
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+
+server:
+  port: 8002
+  shutdown: graceful

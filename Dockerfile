@@ -28,11 +28,11 @@ COPY ws-gateway/src ws-gateway/src
 COPY api-gateway/src api-gateway/src
 
 # Build the application
-ARG SERVICE_NAME
-RUN ./mvnw clean package -pl ${SERVICE_NAME} -am -DskipTests
+ARG MODULE
+RUN ./mvnw clean package -pl ${MODULE} -am -DskipTests -Dspotless.check.skip -Dcheckstyle.skip
 
 # Extract layers
-WORKDIR /workspace/${SERVICE_NAME}/target
+WORKDIR /workspace/${MODULE}/target
 RUN java -Djarmode=layertools -jar *.jar extract
 
 # Runtime stage
@@ -43,11 +43,15 @@ WORKDIR /app
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Copy layers from builder
-ARG SERVICE_NAME
-COPY --from=builder /workspace/${SERVICE_NAME}/target/dependencies/ ./
-COPY --from=builder /workspace/${SERVICE_NAME}/target/spring-boot-loader/ ./
-COPY --from=builder /workspace/${SERVICE_NAME}/target/snapshot-dependencies/ ./
-COPY --from=builder /workspace/${SERVICE_NAME}/target/application/ ./
+ARG MODULE
+COPY --from=builder /workspace/${MODULE}/target/dependencies/ ./
+COPY --from=builder /workspace/${MODULE}/target/spring-boot-loader/ ./
+COPY --from=builder /workspace/${MODULE}/target/snapshot-dependencies/ ./
+COPY --from=builder /workspace/${MODULE}/target/application/ ./
+
+# Healthcheck script used by compose.yaml
+RUN printf '#!/bin/sh\ncurl -sf http://localhost:${SERVER_PORT:-8080}/actuator/health || exit 1\n' > /app/healthcheck.sh \
+    && chmod +x /app/healthcheck.sh
 
 # Set ownership
 RUN chown -R appuser:appuser /app
