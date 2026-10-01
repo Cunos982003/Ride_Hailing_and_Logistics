@@ -19,13 +19,14 @@ API Gateway dùng **Server Web MVC** (Tomcat), không dùng WebFlux. Cả bảy 
 | Module | Package sau `com.ridehailing` | Cổng | Status API | Hạ tầng profile `infra` |
 | --- | --- | ---: | --- | --- |
 | `common` | `common` | — | — | DTO, event, errors, JWT; library JAR |
+| `core` | `core` | 8080 | `/api/v1/auth/*` | PostgreSQL database `user`, Redis |
 | `user-service` | `user` | 8081 | `/api/v1/users/status` | PostgreSQL database `user` |
 | `location-service` | `location` | 8082 | `/api/v1/locations/status` | PostgreSQL `location` + PostGIS, Redis |
 | `dispatch-service` | `dispatch` | 8083 | `/api/v1/trips/status` | PostgreSQL `dispatch` |
 | `pricing-service` | `pricing` | 8084 | `/api/v1/pricing/status` | Redis |
 | `payment-service` | `payment` | 8085 | `/api/v1/payments/status` | PostgreSQL `payment` |
 | `ws-gateway` | `wsgateway` | 8001 | `/api/v1/ws-gateway/status` | Redis; chưa có endpoint WebSocket |
-| `api-gateway` | `apigateway` | 8000 | `/api/v1/gateway/status` | Chuyển tiếp HTTP tới sáu service |
+| `api-gateway` | `apigateway` | 8000 | `/api/v1/gateway/status` | Chuyển tiếp HTTP tới bảy service |
 
 Mỗi app có `/actuator/health`. Chỉ expose actuator `health,info`, không trả chi tiết
 health. Gateway giữ nguyên đường dẫn `/api/v1/...`; không chuyển tiếp actuator upstream.
@@ -90,8 +91,44 @@ curl http://localhost:8081/actuator/health
 ```
 
 Thay tên module để chạy app khác. Override cổng bằng `SERVER_PORT`.
-**Các API chưa được bảo vệ bởi authentication/authorization**; JWT mới là utilities,
-chưa có auth flow/security filter. Không đưa bản scaffold lên public Internet.
+
+### Core service với JWT authentication
+
+Module `core` đã có đầy đủ authentication flow với JWT:
+
+```bash
+# Cần set biến môi trường trước khi chạy:
+export JWT_SECRET="your-secret-key-at-least-32-chars-long-for-hs256-algorithm"
+export INTERNAL_KEY="your-internal-key"
+# PowerShell: $env:JWT_SECRET = "..."; $env:INTERNAL_KEY = "..."
+
+# Chạy với profile infra (cần PostgreSQL và Redis):
+export SPRING_PROFILES_ACTIVE=infra
+export DB_PASSWORD=user-local-only
+java -jar core/target/core-0.1.0-SNAPSHOT.jar
+
+# Test authentication:
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123","fullName":"Test User","role":"CUSTOMER"}'
+
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+**API endpoints:**
+- `POST /api/v1/auth/register` - Đăng ký user (CUSTOMER/DRIVER), tự động tạo wallet
+- `POST /api/v1/auth/login` - Đăng nhập, trả về JWT token
+- `/api/v1/rides/**` - Yêu cầu JWT token với role CUSTOMER
+- `/internal/**` - Yêu cầu header `X-Internal-Key`
+
+**Quy tắc nghiệp vụ:**
+- Customer được 500,000₫ ban đầu, driver được 0₫
+- Password tối thiểu 8 ký tự, hash bằng BCrypt
+- Email phải unique, duplicate trả 409 CONFLICT
+- Login sai trả thông báo chung "Invalid credentials" (401)
+- JWT token hết hạn sau 1 giờ, chứa userId và role claim
 
 ## PostgreSQL/PostGIS và Redis local
 
@@ -127,9 +164,15 @@ password đã lưu. Không xóa volume có dữ liệu; dùng quản trị DB đ
 ## Integration tests và toàn bộ stack Docker
 
 ```bash
-# Cần Docker đang chạy; Testcontainers tự tạo và dọn container riêng.
-./mvnw verify -Pintegration
-# Windows: .\mvnw.cmd verify -Pintegration
+# Chạy unit tests (không cần Docker):
+./mvnw test
+
+# Integration tests cần Docker đang chạy:
+./mvnw test -Pintegration
+# Hoặc test riêng module core:
+./mvnw test -pl core -Pintegration
+
+# Windows: .\mvnw.cmd test -Pintegration
 
 # Multi-stage Java 21 images, runtime non-root:
 docker compose --profile apps config --quiet
@@ -139,10 +182,23 @@ curl http://localhost:8000/api/v1/locations/status
 curl http://localhost:8000/actuator/health
 ```
 
+Profile `integration` chạy các test được đánh dấu `@Tag("integration")`. Mặc định 
+`mvn test` loại trừ integration tests để build nhanh không cần Docker.
+Testcontainers kiểm tra Flyway migration/validation, PostGIS spatial query, Redis
+round-trip và authentication flow. Nếu Docker thiếu, profile integration **fail rõ**, 
+không skip ngầm.
+
+Module `core` có 13 integration tests cho JWT authentication:
+- Register customer/driver với atomic user+wallet creation
+- Login với BCrypt password validation
+- Duplicate email returns 409 CONFLICT
+- Invalid credentials returns 401 UNAUTHORIZED
+- JWT token validation và role-based access control
+- `/api/v1/rides/**` chỉ cho CUSTOMER role (403 cho DRIVER)
+- `/internal/**` endpoints yêu cầu X-Internal-Key header
+
 Dockerfile dùng chung với build arg `MODULE`; profile `apps` gồm bảy app và hạ tầng.
 Để dừng: `docker compose --profile apps down` (không xóa volume).
-Testcontainers kiểm tra Flyway migration/validation, PostGIS spatial query và Redis
-round-trip. Nếu Docker thiếu, profile integration **fail rõ**, không skip ngầm.
 CI dùng JDK 21, job verify và integration; chưa push Docker image hay deploy VPS.
 
 ## Tài liệu và tiêu chí hoàn thành
