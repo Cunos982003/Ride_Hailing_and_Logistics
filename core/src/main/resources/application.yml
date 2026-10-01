@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/ride
     username: ride
-    password: ${PG_PASSWORD}
+    password: ${PG_PASSWORD:postgres-local-only}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
