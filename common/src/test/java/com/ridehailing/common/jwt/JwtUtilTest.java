@@ -26,9 +26,9 @@ class JwtUtilTest {
     assertNotNull(token);
     assertTrue(token.split("\\.").length == 3);
 
-    Claims claims = jwtUtil.validateToken(token);
-    assertEquals("user123", claims.getSubject());
-    assertEquals("PASSENGER", claims.get("role", String.class));
+    assertTrue(jwtUtil.validateToken(token));
+    assertEquals("user123", jwtUtil.extractUserId(token));
+    assertEquals("PASSENGER", jwtUtil.extractRole(token));
   }
 
   /** Test helper that exposes secret key injection for testing. */

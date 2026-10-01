@@ -21,3 +21,9 @@ spring:
 server:
   port: 8000
   shutdown: graceful
+
+jwt:
+  secret: ${JWT_SECRET:dev-secret-key-at-least-32-chars-long-for-hs256}
+
+internal:
+  key: ${INTERNAL_KEY:dev-internal-key}

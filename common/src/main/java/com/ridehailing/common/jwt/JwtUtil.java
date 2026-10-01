@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 
@@ -13,10 +14,9 @@ public class JwtUtil {
 
   private final SecretKey secretKey;
 
-  public JwtUtil() {
-    String secret = System.getenv("JWT_SECRET");
+  public JwtUtil(String secret) {
     if (secret == null || secret.isBlank()) {
-      throw new IllegalStateException("JWT_SECRET environment variable must be set");
+      throw new IllegalStateException("JWT secret must not be blank");
     }
     this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
   }
@@ -30,7 +30,7 @@ public class JwtUtil {
    * Create JWT with userId as subject and role claim.
    *
    * @param userId user identifier
-   * @param role user role (e.g., "PASSENGER", "DRIVER")
+   * @param role user role (e.g., "CUSTOMER", "DRIVER")
    * @return signed JWT token
    */
   public String createToken(String userId, String role) {
@@ -45,13 +45,48 @@ public class JwtUtil {
   }
 
   /**
-   * Parse and validate JWT token.
+   * Generate token with custom expiration (for testing).
+   */
+  public String generateTokenWithExpiration(String userId, String role, Instant expiration) {
+    return Jwts.builder()
+        .subject(userId)
+        .claim("role", role)
+        .issuedAt(new Date())
+        .expiration(Date.from(expiration))
+        .signWith(secretKey)
+        .compact();
+  }
+
+  /**
+   * Validate JWT token and return true if valid.
    *
    * @param token JWT string
-   * @return claims if valid
-   * @throws io.jsonwebtoken.JwtException if invalid or expired
+   * @return true if valid, false otherwise
    */
-  public Claims validateToken(String token) {
-    return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload();
+  public boolean validateToken(String token) {
+    try {
+      Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token);
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
+   * Extract userId from token.
+   */
+  public String extractUserId(String token) {
+    Claims claims = Jwts.parser().verifyWith(secretKey).build()
+        .parseSignedClaims(token).getPayload();
+    return claims.getSubject();
+  }
+
+  /**
+   * Extract role from token.
+   */
+  public String extractRole(String token) {
+    Claims claims = Jwts.parser().verifyWith(secretKey).build()
+        .parseSignedClaims(token).getPayload();
+    return claims.get("role", String.class);
   }
 }
