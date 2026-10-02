@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ride Hailing - Customer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0F172A;
+      color: #F8FAFC;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 24px; margin-bottom: 20px; color: #38BDF8; }
+
+    #loginForm {
+      background: #1E293B;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 400px;
+      margin: 100px auto;
+    }
+    #loginForm h2 { margin-bottom: 20px; color: #F8FAFC; }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      background: #0F172A;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      color: #F8FAFC;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #F97316;
+      color: #F8FAFC;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #EA580C; }
+    button:disabled { background: #64748B; cursor: not-allowed; }
+
+    #app { display: none; }
+    #map { height: 500px; border-radius: 8px; margin-bottom: 20px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #1E293B;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+    .stat-label { font-size: 12px; color: #94A3B8; text-transform: uppercase; }
+    .stat-value { font-size: 24px; color: #38BDF8; font-weight: 600; margin-top: 5px; }
+
+    .controls {
+      background: #1E293B;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .status {
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: inline-block;
+      margin-bottom: 15px;
+    }
+    .status.connected { background: #22C55E; color: #FFF; }
+    .status.disconnected { background: #EF4444; color: #FFF; }
+    .status.connecting { background: #F59E0B; color: #FFF; }
+
+    .ride-form { display: grid; gap: 10px; }
+    .ride-form button { margin-top: 10px; }
+
+    #tripInfo {
+      background: #1E293B;
+      padding: 20px;
+      border-radius: 8px;
+      display: none;
+    }
+    #tripInfo h3 { color: #38BDF8; margin-bottom: 10px; }
+    #tripInfo p { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div id="loginForm">
+    <h2>Đăng nhập</h2>
+    <input type="email" id="email" placeholder="Email" value="customer@test.com">
+    <input type="password" id="password" placeholder="Mật khẩu" value="Test@12345">
+    <button onclick="login()">Đăng nhập</button>
+    <p id="loginError" style="color: #EF4444; margin-top: 10px;"></p>
+  </div>
+
+  <div id="app">
+    <div class="container">
+      <h1>🚗 Ride Hailing - Customer</h1>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-label">Kết nối</div>
+          <div class="stat-value" id="wsStatus">Disconnected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Độ trễ P95 (ms)</div>
+          <div class="stat-value" id="latencyP95">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Số tin nhận</div>
+          <div class="stat-value" id="messageCount">0</div>
+        </div>
+      </div>
+
+      <div id="map"></div>
+
+      <div class="controls">
+        <div class="status" id="statusBadge">Disconnected</div>
+        <div class="ride-form">
+          <p style="color: #94A3B8; font-size: 14px;">Click vào bản đồ để chọn điểm đón và điểm đến</p>
+          <input type="text" id="pickupDisplay" placeholder="Điểm đón (click trên bản đồ)" readonly>
+          <input type="text" id="dropoffDisplay" placeholder="Điểm đến (click trên bản đồ)" readonly>
+          <button onclick="requestRide()" id="requestBtn" disabled>Đặt xe</button>
+        </div>
+      </div>
+
+      <div id="tripInfo">
+        <h3>Thông tin chuyến đi</h3>
+        <p><strong>Trạng thái:</strong> <span id="tripStatus">-</span></p>
+        <p><strong>Tài xế:</strong> <span id="driverInfo">-</span></p>
+        <p><strong>Giá:</strong> <span id="tripPrice">-</span></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let token = null;
+    let ws = null;
+    let map = null;
+    let driverMarker = null;
+    let pickupMarker = null;
+    let dropoffMarker = null;
+    let pickup = null;
+    let dropoff = null;
+    let reconnectAttempts = 0;
+    let latencies = [];
+    let messageCount = 0;
+    let clickMode = 'pickup';
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('loginError');
+
+      try {
+        const res = await fetch('http://localhost:8000/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          errorEl.textContent = err.message || 'Đăng nhập thất bại';
+          return;
+        }
+
+        const data = await res.json();
+        token = data.accessToken || data.token;
+
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+
+        initMap();
+        connectWebSocket();
+      } catch (err) {
+        errorEl.textContent = 'Lỗi kết nối: ' + err.message;
+      }
+    }
+
+    function initMap() {
+      map = L.map('map').setView([21.0285, 105.8542], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      map.on('click', function(e) {
+        if (clickMode === 'pickup') {
+          pickup = e.latlng;
+          if (pickupMarker) map.removeLayer(pickupMarker);
+          pickupMarker = L.marker(pickup, {
+            icon: L.divIcon({ className: 'pickup-marker', html: '📍', iconSize: [30, 30] })
+          }).addTo(map);
+          document.getElementById('pickupDisplay').value =
+            `${pickup.lat.toFixed(6)}, ${pickup.lng.toFixed(6)}`;
+          clickMode = 'dropoff';
+        } else {
+          dropoff = e.latlng;
+          if (dropoffMarker) map.removeLayer(dropoffMarker);
+          dropoffMarker = L.marker(dropoff, {
+            icon: L.divIcon({ className: 'dropoff-marker', html: '🎯', iconSize: [30, 30] })
+          }).addTo(map);
+          document.getElementById('dropoffDisplay').value =
+            `${dropoff.lat.toFixed(6)}, ${dropoff.lng.toFixed(6)}`;
+          clickMode = 'pickup';
+
+          if (pickup && dropoff) {
+            document.getElementById('requestBtn').disabled = false;
+          }
+        }
+      });
+    }
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/customer`;
+
+      updateStatus('connecting');
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        updateStatus('connected');
+        reconnectAttempts = 0;
+        ws.send(JSON.stringify({ t: 'auth', token: token }));
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        messageCount++;
+        document.getElementById('messageCount').textContent = messageCount;
+
+        if (msg.t === 'driver_location') {
+          handleDriverLocation(msg.data);
+        } else if (msg.t === 'trip_update') {
+          handleTripUpdate(msg.data);
+        } else if (msg.t === 'offer') {
+          handleOffer(msg.data);
+        } else if (msg.t === 'error') {
+          console.error('WebSocket error:', msg.code, msg.message);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        updateStatus('disconnected');
+        scheduleReconnect();
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+      };
+    }
+
+    function handleDriverLocation(data) {
+      const now = Date.now();
+      const sentAt = data.sent_at || now;
+      const latency = now - sentAt;
+
+      latencies.push(latency);
+      if (latencies.length > 50) latencies.shift();
+
+      const sorted = [...latencies].sort((a, b) => a - b);
+      const p95Index = Math.floor(sorted.length * 0.95);
+      const p95 = sorted[p95Index];
+      document.getElementById('latencyP95').textContent = Math.round(p95);
+
+      if (driverMarker) {
+        driverMarker.setLatLng([data.lat, data.lng]);
+      } else {
+        driverMarker = L.marker([data.lat, data.lng], {
+          icon: L.divIcon({ className: 'driver-marker', html: '🚗', iconSize: [30, 30] })
+        }).addTo(map);
+      }
+    }
+
+    function handleTripUpdate(data) {
+      document.getElementById('tripInfo').style.display = 'block';
+      document.getElementById('tripStatus').textContent = data.status || '-';
+      document.getElementById('driverInfo').textContent = data.driver_name || '-';
+      document.getElementById('tripPrice').textContent =
+        data.price ? `${(data.price / 1000).toFixed(0)}k VND` : '-';
+    }
+
+    function handleOffer(data) {
+      console.log('Ride offer received:', data);
+    }
+
+    function updateStatus(status) {
+      const badge = document.getElementById('statusBadge');
+      const statusText = document.getElementById('wsStatus');
+
+      badge.className = 'status ' + status;
+
+      if (status === 'connected') {
+        badge.textContent = 'Đã kết nối';
+        statusText.textContent = 'Connected';
+        statusText.style.color = '#22C55E';
+      } else if (status === 'connecting') {
+        badge.textContent = 'Đang kết nối...';
+        statusText.textContent = 'Connecting';
+        statusText.style.color = '#F59E0B';
+      } else {
+        badge.textContent = 'Mất kết nối';
+        statusText.textContent = 'Disconnected';
+        statusText.style.color = '#EF4444';
+      }
+    }
+
+    function scheduleReconnect() {
+      const baseDelay = 1000;
+      const maxDelay = 30000;
+      const jitter = Math.random() * 1000;
+      const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts) + jitter, maxDelay);
+
+      reconnectAttempts++;
+      console.log(`Reconnecting in ${Math.round(delay)}ms (attempt ${reconnectAttempts})`);
+
+      setTimeout(() => connectWebSocket(), delay);
+    }
+
+    async function requestRide() {
+      if (!pickup || !dropoff) {
+        alert('Vui lòng chọn điểm đón và điểm đến');
+        return;
+      }
+
+      if (!token) {
+        alert('Chưa đăng nhập. Vui lòng refresh trang và login lại.');
+        return;
+      }
+
+      const idempotencyKey = Math.random().toString(36).substring(2) + Date.now();
+
+      console.log('Requesting ride with token:', token.substring(0, 20) + '...');
+
+      try {
+        const res = await fetch('http://localhost:8000/api/v1/rides', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Idempotency-Key': idempotencyKey
+          },
+          body: JSON.stringify({
+            pickup_lat: pickup.lat,
+            pickup_lng: pickup.lng,
+            dropoff_lat: dropoff.lat,
+            dropoff_lng: dropoff.lng
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Lỗi: ' + (err.message || 'Không thể đặt xe'));
+          return;
+        }
+
+        const ride = await res.json();
+        console.log('Ride created:', ride);
+        document.getElementById('requestBtn').disabled = true;
+      } catch (err) {
+        alert('Lỗi kết nối: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: location-service
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:123456}
+
+app:
+  internal-key: ${INTERNAL_KEY:secret}
+internal:
+  key: ${INTERNAL_KEY:secret}
+
+server:
+  port: 8002
+  shutdown: graceful
+
+logging:
+  level:
+    com.ridehailing: DEBUG
