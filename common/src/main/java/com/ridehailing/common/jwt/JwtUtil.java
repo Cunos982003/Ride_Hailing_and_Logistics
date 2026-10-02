@@ -44,9 +44,7 @@ public class JwtUtil {
         .compact();
   }
 
-  /**
-   * Generate token with custom expiration (for testing).
-   */
+  /** Generate token with custom expiration (for testing). */
   public String generateTokenWithExpiration(String userId, String role, Instant expiration) {
     return Jwts.builder()
         .subject(userId)
@@ -72,21 +70,17 @@ public class JwtUtil {
     }
   }
 
-  /**
-   * Extract userId from token.
-   */
+  /** Extract userId from token. */
   public String extractUserId(String token) {
-    Claims claims = Jwts.parser().verifyWith(secretKey).build()
-        .parseSignedClaims(token).getPayload();
+    Claims claims =
+        Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload();
     return claims.getSubject();
   }
 
-  /**
-   * Extract role from token.
-   */
+  /** Extract role from token. */
   public String extractRole(String token) {
-    Claims claims = Jwts.parser().verifyWith(secretKey).build()
-        .parseSignedClaims(token).getPayload();
+    Claims claims =
+        Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload();
     return claims.get("role", String.class);
   }
 }

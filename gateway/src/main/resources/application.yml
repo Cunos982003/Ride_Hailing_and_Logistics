@@ -4,10 +4,23 @@ spring:
   threads:
     virtual:
       enabled: true
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:123456}
 
 server:
   port: 8001
   shutdown: graceful
+
+location:
+  service:
+    url: http://localhost:8082
+
+internal:
+  key: ${INTERNAL_KEY:secret-change-in-production}
+
+jwt:
+  secret: ${JWT_SECRET:dev-secret-key-at-least-32-chars-long-for-hs256}
+  expiration-ms: 86400000

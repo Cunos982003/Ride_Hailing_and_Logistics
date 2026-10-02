@@ -2,7 +2,6 @@ package com.ridehailing.common.jwt;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;

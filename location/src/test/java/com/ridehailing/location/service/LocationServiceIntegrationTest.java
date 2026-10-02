@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -27,11 +28,12 @@ import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LocationServiceIntegrationTest {
 
   @Container
-  static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-      .withExposedPorts(6379);
+  static GenericContainer<?> redis =
+      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
 
   @DynamicPropertySource
   static void redisProperties(DynamicPropertyRegistry registry) {
@@ -74,11 +76,12 @@ class LocationServiceIntegrationTest {
     // Driver 1: very close (100m north)
     // Driver 2: medium (1km east)
     // Driver 3: far (5km south)
-    List<LocationUpdate> updates = List.of(
-        new LocationUpdate(driver1, 21.0295, 105.8542),  // ~1.1 km north
-        new LocationUpdate(driver2, 21.0285, 105.8642),  // ~1 km east
-        new LocationUpdate(driver3, 21.0285, 105.7542)   // ~10 km west
-    );
+    List<LocationUpdate> updates =
+        List.of(
+            new LocationUpdate(driver1, 21.0295, 105.8542), // ~1.1 km north
+            new LocationUpdate(driver2, 21.0285, 105.8642), // ~1 km east
+            new LocationUpdate(driver3, 21.0285, 105.7542) // ~10 km west
+            );
 
     locationService.update(updates);
 
@@ -100,10 +103,11 @@ class LocationServiceIntegrationTest {
   void update_InvalidCoordinates_Ignored() {
     UUID driver = UUID.randomUUID();
 
-    List<LocationUpdate> updates = List.of(
-        new LocationUpdate(driver, 91.0, 105.8542),  // invalid lat
-        new LocationUpdate(driver, 21.0285, 181.0)   // invalid lng
-    );
+    List<LocationUpdate> updates =
+        List.of(
+            new LocationUpdate(driver, 91.0, 105.8542), // invalid lat
+            new LocationUpdate(driver, 21.0285, 181.0) // invalid lng
+            );
 
     locationService.update(updates);
 
@@ -116,9 +120,7 @@ class LocationServiceIntegrationTest {
   void removeDriver_Success() {
     UUID driver = UUID.randomUUID();
 
-    locationService.update(List.of(
-        new LocationUpdate(driver, 21.0285, 105.8542)
-    ));
+    locationService.update(List.of(new LocationUpdate(driver, 21.0285, 105.8542)));
 
     List<Candidate> before = locationService.findNearby(21.0285, 105.8542, 1.0, 10);
     assertThat(before).hasSize(1);
